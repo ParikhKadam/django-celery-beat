@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 
 import codecs
 import os
@@ -19,15 +18,15 @@ except (AttributeError, ImportError):
 NAME = 'django-celery-beat'
 PACKAGE = 'django_celery_beat'
 
-E_UNSUPPORTED_PYTHON = '%s 1.0 requires %%s %%s or later!' % (NAME,)
+E_UNSUPPORTED_PYTHON = f'{NAME} 1.0 requires %s %s or later!'
 
 PYIMP = _pyimp()
-PY36_OR_LESS = sys.version_info < (3, 6)
+PY37_OR_LESS = sys.version_info < (3, 7)
 PYPY_VERSION = getattr(sys, 'pypy_version_info', None)
 PYPY24_ATLEAST = PYPY_VERSION and PYPY_VERSION >= (2, 4)
 
-if PY36_OR_LESS and not PYPY24_ATLEAST:
-    raise Exception(E_UNSUPPORTED_PYTHON % (PYIMP, '3.6'))
+if PY37_OR_LESS and not PYPY24_ATLEAST:
+    raise Exception(E_UNSUPPORTED_PYTHON % (PYIMP, '3.7'))
 
 # -*- Classifiers -*-
 
@@ -36,17 +35,16 @@ classes = """
     License :: OSI Approved :: BSD License
     Programming Language :: Python
     Programming Language :: Python :: 3
-    Programming Language :: Python :: 3.6
     Programming Language :: Python :: 3.7
     Programming Language :: Python :: 3.8
     Programming Language :: Python :: 3.9
+    Programming Language :: Python :: 3.10
     Programming Language :: Python :: Implementation :: CPython
     Programming Language :: Python :: Implementation :: PyPy
     Framework :: Django
-    Framework :: Django :: 2.2
-    Framework :: Django :: 3.0
-    Framework :: Django :: 3.1
     Framework :: Django :: 3.2
+    Framework :: Django :: 4.0
+    Framework :: Django :: 4.1
     Operating System :: OS Independent
     Topic :: Communications
     Topic :: System :: Distributed Computing
@@ -68,6 +66,7 @@ def add_default(m):
 def add_doc(m):
     return (('doc', m.groups()[0]),)
 
+
 pats = {re_meta: add_default,
         re_doc: add_doc}
 here = os.path.abspath(os.path.dirname(__file__))
@@ -83,8 +82,9 @@ with open(os.path.join(here, PACKAGE, '__init__.py')) as meta_fh:
 
 # -*- Installation Requires -*-
 
-def strip_comments(l):
-    return l.split('#', 1)[0].strip()
+
+def strip_comments(line):
+    return line.split('#', 1)[0].strip()
 
 
 def _pip_requirement(req):
@@ -97,7 +97,7 @@ def _pip_requirement(req):
 def _reqs(*f):
     return [
         _pip_requirement(r) for r in (
-            strip_comments(l) for l in open(
+            strip_comments(line) for line in open(
                 os.path.join(os.getcwd(), 'requirements', *f)).readlines()
         ) if r]
 
@@ -107,18 +107,19 @@ def reqs(*f):
 
 # -*- Long Description -*-
 
+
 if os.path.exists('README.rst'):
     long_description = codecs.open('README.rst', 'r', 'utf-8').read()
     long_description_content_type = 'text/x-rst'
 else:
-    long_description = 'See http://pypi.python.org/pypi/%s' % (NAME,)
+    long_description = f'See http://pypi.python.org/pypi/{NAME}'
     long_description_content_type = 'text/markdown'
 
 # -*- %%% -*-
 
 
 class pytest(setuptools.command.test.test):
-    user_options = [('pytest-args=', 'a', 'Arguments to pass to py.test')]
+    user_options = [('pytest-args=', 'a', 'Arguments to pass to pytest')]
 
     def initialize_options(self):
         setuptools.command.test.test.initialize_options(self)
@@ -127,6 +128,7 @@ class pytest(setuptools.command.test.test):
     def run_tests(self):
         import pytest
         sys.exit(pytest.main(self.pytest_args))
+
 
 setuptools.setup(
     name=NAME,

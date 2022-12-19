@@ -1,21 +1,17 @@
 """Periodic Task Admin interface."""
+from celery import current_app
+from celery.utils import cached_property
 from django import forms
 from django.conf import settings
 from django.contrib import admin, messages
-from django.db.models import When, Value, Case
+from django.db.models import Case, Value, When
 from django.forms.widgets import Select
 from django.template.defaultfilters import pluralize
 from django.utils.translation import gettext_lazy as _
-
-from celery import current_app
-from celery.utils import cached_property
 from kombu.utils.json import loads
 
-from .models import (
-    PeriodicTask, PeriodicTasks,
-    IntervalSchedule, CrontabSchedule,
-    SolarSchedule, ClockedSchedule
-)
+from .models import (ClockedSchedule, CrontabSchedule, IntervalSchedule,
+                     PeriodicTask, PeriodicTasks, SolarSchedule)
 from .utils import is_database_scheduler
 
 
@@ -26,7 +22,7 @@ class TaskSelectWidget(Select):
     _choices = None
 
     def tasks_as_choices(self):
-        _ = self._modules  # noqa
+        _ = self._modules
         tasks = list(sorted(name for name in self.celery_app.tasks
                             if not name.startswith('celery.')))
         return (('', ''), ) + tuple(zip(tasks, tasks))
@@ -126,16 +122,16 @@ class PeriodicTaskAdmin(admin.ModelAdmin):
             'fields': ('name', 'regtask', 'task', 'enabled', 'description',),
             'classes': ('extrapretty', 'wide'),
         }),
-        ('Schedule', {
+        (_('Schedule'), {
             'fields': ('interval', 'crontab', 'solar', 'clocked',
                        'start_time', 'last_run_at', 'one_off'),
             'classes': ('extrapretty', 'wide'),
         }),
-        ('Arguments', {
+        (_('Arguments'), {
             'fields': ('args', 'kwargs'),
             'classes': ('extrapretty', 'wide', 'collapse', 'in'),
         }),
-        ('Execution Options', {
+        (_('Execution Options'), {
             'fields': ('expires', 'expire_seconds', 'queue', 'exchange',
                        'routing_key', 'priority', 'headers'),
             'classes': ('extrapretty', 'wide', 'collapse', 'in'),
@@ -149,7 +145,7 @@ class PeriodicTaskAdmin(admin.ModelAdmin):
         extra_context = extra_context or {}
         scheduler = getattr(settings, 'CELERY_BEAT_SCHEDULER', None)
         extra_context['wrong_scheduler'] = not is_database_scheduler(scheduler)
-        return super(PeriodicTaskAdmin, self).changelist_view(
+        return super().changelist_view(
             request, extra_context)
 
     def get_queryset(self, request):
@@ -179,7 +175,7 @@ class PeriodicTaskAdmin(admin.ModelAdmin):
     enable_tasks.short_description = _('Enable selected tasks')
 
     def disable_tasks(self, request, queryset):
-        rows_updated = queryset.update(enabled=False)
+        rows_updated = queryset.update(enabled=False, last_run_at=None)
         PeriodicTasks.update_changed()
         self._message_user_about_update(request, rows_updated, 'disabled')
     disable_tasks.short_description = _('Disable selected tasks')
@@ -201,7 +197,8 @@ class PeriodicTaskAdmin(admin.ModelAdmin):
         tasks = [(self.celery_app.tasks.get(task.task),
                   loads(task.args),
                   loads(task.kwargs),
-                  task.queue)
+                  task.queue,
+                  task.name)
                  for task in queryset]
 
         if any(t[0] is None for t in tasks):
@@ -214,15 +211,19 @@ class PeriodicTaskAdmin(admin.ModelAdmin):
 
             self.message_user(
                 request,
-                _('task "{0}" not found'.format(not_found_task_name)),
+                _(f'task "{not_found_task_name}" not found'),
                 level=messages.ERROR,
             )
             return
 
-        task_ids = [task.apply_async(args=args, kwargs=kwargs, queue=queue)
-                    if queue and len(queue)
-                    else task.apply_async(args=args, kwargs=kwargs)
-                    for task, args, kwargs, queue in tasks]
+        task_ids = [
+            task.apply_async(args=args, kwargs=kwargs, queue=queue,
+                             periodic_task_name=periodic_task_name)
+            if queue and len(queue)
+            else task.apply_async(args=args, kwargs=kwargs,
+                                  periodic_task_name=periodic_task_name)
+            for task, args, kwargs, queue, periodic_task_name in tasks
+        ]
         tasks_run = len(task_ids)
         self.message_user(
             request,
